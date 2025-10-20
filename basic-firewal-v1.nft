@@ -1,0 +1,70 @@
+
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table inet filter {
+
+  # counters:
+
+  counter cnt_SSH {
+    comment "Counts SSH connection"
+  }
+
+  counter cnt_HTTP {
+    comment "Counts HTTP connection"
+  }
+
+  counter cnt_HTTPS {
+    comment "Counts HTTPS connection"
+  }
+
+  counter cnt_DNS {
+    comment "Counts DNS traffic"
+  }
+
+
+  # input chain
+
+  chain input {
+  type filter hook input priority filter; policy drop;
+
+  ct state established,related accept
+
+  # accept loopback
+  iif "lo" accept
+
+  jump SSH_TRUSTED
+
+  # accept HTTP,HTTPS,DNS and counting them
+  tcp dport 80   counter name cnt_HTTP accept
+  tcp dport 443   counter name cnt_HTTPS accept
+  
+
+  # rejecting ICMP
+  ip protocol icmp log prefix "[nftables] ICMP dropped: " drop 
+
+  # log all dropped packets
+  log prefix "[nftables] Dropped: " drop 
+
+  
+}
+
+chain SSH_TRUSTED {
+  ip saddr 192.168.0.64/24 tcp dport \
+  limit rate 10/seconds counter name cnt_SSH log prefix "SSH_TRUSTED: " accept
+}
+
+chain forward {
+  type filter hook forward priority filter;
+  ct state established,related accept
+  
+}
+chain output {
+  type filter hook output priority filter;
+
+  # accept DNS traffic
+  tcp dport 53  counter name cnt_DNS accept
+  udp dport 53  counter name cnt_DNS accept 
+}
+}
